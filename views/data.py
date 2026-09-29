@@ -1,29 +1,39 @@
-from pathlib import Path
-
-import pandas as pd
 import streamlit as st
 
-
-# Move from views/data.py to the project root, then locate the CSV.
-DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "reservoirs.csv"
+from data_utils import load_data
 
 
-@st.cache_data
-def load_data():
-    """Read the CSV once and reuse the result during subsequent reruns."""
-    return pd.read_csv(DATA_PATH)
+st.title("First-Month Summary")
 
-
-st.title("Reservoir Data")
-
-# Stop with an understandable message if the file is missing.
-if not DATA_PATH.is_file():
-    st.error("CSV not found. Place reservoirs.csv in the project's data folder.")
-    st.stop()
-
+# Load the prepared national series and select its first calendar month.
 df = load_data()
+months = df["date"].dt.to_period("M")
+first_month = months.min()
+month_df = df.loc[months == first_month]
 
-st.write(f"The dataset contains **{len(df):,} rows** and **{len(df.columns)} columns**.")
+# Map the requested measurements to readable names.
+names = {
+    "fill_fraction": "Fill ratio",
+    "capacity_twh": "Capacity (TWh)",
+    "stored_energy_twh": "Stored energy (TWh)",
+    "previous_week_fill_fraction": "Previous week's fill ratio",
+    "fill_fraction_change": "Fill ratio change",
+}
 
-# Display the imported data as a scrollable table.
-st.dataframe(df, hide_index=True)
+# Each row contains a measurement name and its chronological monthly values.
+summary = {
+    "Measurement": list(names.values()),
+    "Summary": [month_df[column].tolist() for column in names],
+}
+
+st.caption(f"Month: {first_month}")
+
+st.dataframe(
+    summary,
+    column_config={
+        "Summary": st.column_config.LineChartColumn(
+            "Summary",
+        ),
+    },
+    hide_index=True,
+)
