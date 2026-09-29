@@ -7,6 +7,7 @@ st.set_page_config(page_title="IND320 - Reservoir Data", layout="wide")
 pages = [
     st.Page("views/home.py", title="Home", default=True),
     st.Page("views/data.py", title="Data"),
+    st.Page("views/plots.py", title="Plots"),
 ]
 
 # Show sidebar navigation and run the selected page.
