@@ -1,11 +1,14 @@
 import streamlit as st
 
 # Set the browser-tab title and page layout.
-st.set_page_config(page_title="Test", layout="wide")
+st.set_page_config(page_title="IND320 - Reservoir Data", layout="wide")
 
-# Display the home-page title and introduction.
-st.title("IND320")
-st.write(
-    "This is the first text. "
-    "Just a test."
-)
+# Register each page from its separate Python file.
+pages = [
+    st.Page("views/home.py", title="Home", default=True),
+    st.Page("views/data.py", title="Data"),
+]
+
+# Show sidebar navigation and run the selected page.
+navigation = st.navigation(pages, position="sidebar")
+navigation.run()
