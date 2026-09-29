@@ -8,6 +8,7 @@ pages = [
     st.Page("views/home.py", title="Home", default=True),
     st.Page("views/data.py", title="Data"),
     st.Page("views/plots.py", title="Plots"),
+    st.Page("views/four.py", title="Four"),
 ]
 
 # Show sidebar navigation and run the selected page.
