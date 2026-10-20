@@ -1,22 +1,44 @@
-from pathlib import Path
-
 import pandas as pd
+import requests
 import streamlit as st
 
 
-@st.cache_data
-def load_data():
-    """Load, filter and prepare the reservoir data."""
-    # Locate the CSV relative to this file.
-    path = Path(__file__).parent / "data" / "reservoirs.csv"
-    df = pd.read_csv(path)
+# NVE Magasinstatistikk API endpoint.
+NVE_URL = "https://biapi.nve.no/magasinstatistikk/api/Magasinstatistikk/HentOffentligData"
 
-    # Keep only the national series: area type NO, area number 0.
-    df = df.loc[
-        (df["omrType"] == "NO") & (df["omrnr"] == 0)
-    ].copy()
+# Readable names for the reservoir measurements.
+MEASUREMENTS = {
+    "fill_fraction": "Fill ratio",
+    "capacity_twh": "Capacity (TWh)",
+    "stored_energy_twh": "Stored energy (TWh)",
+    "previous_week_fill_fraction": "Previous week's fill ratio",
+    "fill_fraction_change": "Fill ratio change",
+}
 
-    # Rename all columns to English.
+
+@st.cache_data(ttl=3600, show_spinner="Downloading NVE data...")
+def load_data(start_date, end_date, area_type):
+    """
+    Download reservoir data from NVE for the selected interval
+    and area type, then prepare it for Streamlit.
+    """
+
+    # Retrieve observations directly from the NVE API.
+    response = requests.get(
+        NVE_URL,
+        timeout=60
+    )
+    response.raise_for_status()
+
+    data = response.json()
+
+    # Some API responses wrap observations in a data field.
+    if isinstance(data, dict):
+        data = data.get("data", data.get("value", data))
+
+    df = pd.DataFrame(data)
+
+    # Rename the Norwegian API columns.
     df = df.rename(columns={
         "dato_Id": "date",
         "omrType": "area_type",
@@ -31,8 +53,33 @@ def load_data():
         "endring_fyllingsgrad": "fill_fraction_change",
     })
 
-    # Convert observation dates and sort from oldest to newest.
-    df["date"] = pd.to_datetime(df["date"])
-    df = df.sort_values("date").reset_index(drop=True)
+    # Convert dates and numerical values to appropriate types.
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    df["area_number"] = pd.to_numeric(
+        df["area_number"], errors="coerce"
+    )
+
+    for column in MEASUREMENTS:
+        if column in df.columns:
+            df[column] = pd.to_numeric(
+                df[column], errors="coerce"
+            )
+
+    # Keep the selected geographical area type.
+    df = df.loc[df["area_type"] == area_type].copy()
+
+    # Keep observations within the selected date interval.
+    start_date = pd.Timestamp(start_date)
+    end_date = pd.Timestamp(end_date)
+
+    df = df.loc[
+        (df["date"] >= start_date) &
+        (df["date"] <= end_date)
+    ].copy()
+
+    # Sort observations chronologically within each area.
+    df = df.sort_values(
+        ["area_number", "date"]
+    ).reset_index(drop=True)
 
     return df

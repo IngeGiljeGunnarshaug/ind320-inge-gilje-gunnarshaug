@@ -3,3 +3,4 @@ pandas
 matplotlib
 pymongo[srv]
 python-dotenv
+requests
