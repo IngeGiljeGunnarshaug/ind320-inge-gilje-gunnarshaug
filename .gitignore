@@ -216,3 +216,14 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+.DS_Store
+.venv/
+.venv-ind320/
+
+data/entsoe.pkl
+
+.streamlit
+.streamlit/secrets.toml
+
+part_1.pdf
