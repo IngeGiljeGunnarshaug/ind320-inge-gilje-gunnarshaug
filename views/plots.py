@@ -2,83 +2,80 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
 
-from data_utils import load_data
+from data_utils import load_data, MEASUREMENTS
 
 
-st.title("Reservoir Data Plots")
+st.title("Reservoir Plots")
 
-df = load_data()
+st.write(
+    "Select a geographical area type, measurement and interval "
+    "to compare reservoir observations."
+)
 
-# Use the same five measurements containing informative data
-names = {
-    "fill_fraction": "Fill ratio",
-    "capacity_twh": "Capacity (TWh)",
-    "stored_energy_twh": "Stored energy (TWh)",
-    "previous_week_fill_fraction": "Previous week's fill ratio",
-    "fill_fraction_change": "Fill ratio change",
-}
+# Choose the geographical area type.
+area_type = st.radio(
+    "Area type",
+    ["EL", "NO", "VASS"],
+    horizontal=True
+)
 
-selection = st.selectbox(
+# Choose the measurement to visualize.
+measurement = st.selectbox(
     "Measurement",
-    ["All columns"] + list(names),
-    format_func=lambda column: names.get(column, column),
+    options=list(MEASUREMENTS),
+    format_func=lambda x: MEASUREMENTS[x]
 )
 
-# Select an inclusive month range, initially containing only the first month.
-months = df["date"].dt.to_period("M")
-options = sorted(months.astype(str).unique())
-
-start, end = st.select_slider(
-    "Months",
-    options=options,
-    value=(options[0], options[0]),
+# The slider controls the interval used when requesting data.
+start_month, end_month = st.select_slider(
+    "Download interval",
+    options=pd.period_range(
+        "2024-01",
+        pd.Timestamp.today().to_period("M"),
+        freq="M"
+    ).astype(str).tolist(),
+    value=(
+        "2025-01",
+        pd.Timestamp.today().strftime("%Y-%m")
+    )
 )
 
-filtered = df.loc[
-    (months >= pd.Period(start, freq="M"))
-    & (months <= pd.Period(end, freq="M"))
-]
+start_date = pd.Period(start_month).start_time.date()
+end_date = pd.Period(end_month).end_time.date()
 
-columns = list(names) if selection == "All columns" else [selection]
+# Download the selected reservoir observations.
+try:
+    df = load_data(start_date, end_date, area_type)
+except Exception as error:
+    st.error(f"Unable to retrieve NVE data: {error}")
+    st.stop()
 
-fig, ax = plt.subplots(figsize=(10, 5))
+if df.empty:
+    st.warning("No observations found for this selection.")
+    st.stop()
 
-if selection == "All columns":
-    # Standardise using the full history so changing months keeps the same scale.
-    values = df[list(names)]
-    means = values.mean()
-    stds = values.std()
+# Create one line per area number.
+fig, ax = plt.subplots(figsize=(11, 5))
 
-    # Constant columns cannot be standardised; display them at zero.
-    constant = values.nunique().eq(1)
-    scaled = (values - means) / stds.mask(constant)
+for area_number, group in df.groupby("area_number"):
+    group = group.sort_values("date")
 
-    for column in names:
-        label = names[column]
+    ax.plot(
+        group["date"],
+        group[measurement],
+        label=f"Area {int(area_number)}",
+        linewidth=1.5
+    )
 
-        if constant[column]:
-            scaled[column] = values[column].where(values[column].isna(), 0)
-            label += " (constant; shown at 0)"
-
-        ax.plot(
-            filtered["date"],
-            scaled.loc[filtered.index, column],
-            label=label,
-            linewidth=1.2,
-        )
-
-    ax.set_title("Reservoir Measurements — Standardised")
-    ax.set_ylabel("Standard deviations from the mean")
-    ax.legend()
-
-else:
-    # Show a single measurement in its original units.
-    ax.plot(filtered["date"], filtered[selection], linewidth=1.2)
-    ax.set_title(names[selection])
-    ax.set_ylabel(names[selection])
+ax.set_title(
+    f"{MEASUREMENTS[measurement]} - {area_type}"
+)
 
 ax.set_xlabel("Date")
+ax.set_ylabel(MEASUREMENTS[measurement])
 ax.grid(alpha=0.3)
+ax.legend(title="Area number")
+
 fig.autofmt_xdate()
 fig.tight_layout()
 

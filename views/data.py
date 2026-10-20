@@ -78,11 +78,3 @@ st.dataframe(
     hide_index=True,
     use_container_width=True
 )
-
-# Allow inspection of the underlying observations.
-with st.expander("View raw data"):
-    st.dataframe(
-        df,
-        hide_index=True,
-        use_container_width=True
-    )
