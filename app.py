@@ -1,14 +1,14 @@
 import streamlit as st
 
 # Set the browser-tab title and page layout.
-st.set_page_config(page_title="IND320 - Reservoir Data", layout="wide")
+st.set_page_config(page_title="IND320 - Energy Data", layout="wide")
 
 # Register each page from its separate Python file.
 pages = [
     st.Page("views/home.py", title="Home", default=True),
-    st.Page("views/data.py", title="Data"),
-    st.Page("views/plots.py", title="Plots"),
-    st.Page("views/four.py", title="Four"),
+    st.Page("views/data.py", title="Reservoir Data"),
+    st.Page("views/plots.py", title="Reservoir Plots"),
+    st.Page("views/four.py", title="ENTSO-E Data"),
 ]
 
 # Show sidebar navigation and run the selected page.

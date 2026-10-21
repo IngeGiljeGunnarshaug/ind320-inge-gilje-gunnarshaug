@@ -1,39 +1,80 @@
 import streamlit as st
+import pandas as pd
 
-from data_utils import load_data
+from data_utils import load_data, MEASUREMENTS
 
 
-st.title("First-Month Summary")
+st.title("Reservoir Data")
 
-# Load the prepared national series and select its first calendar month.
-df = load_data()
-months = df["date"].dt.to_period("M")
-first_month = months.min()
-month_df = df.loc[months == first_month]
+st.write(
+    "Compare reservoir measurements across geographical areas "
+    "using data retrieved directly from NVE."
+)
 
-# Map the requested measurements to readable names.
-names = {
-    "fill_fraction": "Fill ratio",
-    "capacity_twh": "Capacity (TWh)",
-    "stored_energy_twh": "Stored energy (TWh)",
-    "previous_week_fill_fraction": "Previous week's fill ratio",
-    "fill_fraction_change": "Fill ratio change",
-}
+# Select the geographical area type.
+area_type = st.radio(
+    "Area type",
+    ["EL", "NO", "VASS"],
+    horizontal=True
+)
 
-# Each row contains a measurement name and its chronological monthly values.
-summary = {
-    "Measurement": list(names.values()),
-    "Summary": [month_df[column].tolist() for column in names],
-}
+# Select the period to display.
+start_date, end_date = st.date_input(
+    "Date interval",
+    value=(
+        pd.Timestamp("2025-01-01").date(),
+        pd.Timestamp.today().date()
+    )
+)
 
-st.caption(f"Month: {first_month}")
+if start_date > end_date:
+    st.error("The start date must be before the end date.")
+    st.stop()
+
+# Retrieve and prepare NVE observations.
+try:
+    df = load_data(start_date, end_date, area_type)
+except Exception as error:
+    st.error(f"Unable to retrieve NVE data: {error}")
+    st.stop()
+
+if df.empty:
+    st.warning("No observations found for this selection.")
+    st.stop()
+
+# Select the measurement used in the summary table.
+measurement = st.selectbox(
+    "Measurement",
+    options=list(MEASUREMENTS),
+    format_func=lambda x: MEASUREMENTS[x]
+)
+
+# Display a separate trend for every area number.
+summary = []
+
+for area_number, group in df.groupby("area_number"):
+    group = group.sort_values("date")
+
+    summary.append({
+        "Area number": int(area_number),
+        "Observations": len(group),
+        "Latest value": group[measurement].iloc[-1],
+        "Trend": group[measurement].tolist()
+    })
+
+st.subheader("Area Summary")
 
 st.dataframe(
-    summary,
+    pd.DataFrame(summary),
     column_config={
-        "Summary": st.column_config.LineChartColumn(
-            "Summary",
+        "Trend": st.column_config.LineChartColumn(
+            "Trend"
         ),
+        "Latest value": st.column_config.NumberColumn(
+            "Latest value",
+            format="%.3f"
+        )
     },
     hide_index=True,
+    use_container_width=True
 )
