@@ -23,9 +23,15 @@ def load_data(start_date, end_date, area_type):
     and area type, then prepare it for Streamlit.
     """
 
-    # Retrieve observations directly from the NVE API.
+    # Retrieve observations for the selected date interval.
+    params = {
+        "datoFra": pd.Timestamp(start_date).strftime("%Y-%m-%d"),
+        "datoTil": pd.Timestamp(end_date).strftime("%Y-%m-%d"),
+    }
+
     response = requests.get(
         NVE_URL,
+        params=params,
         timeout=60
     )
     response.raise_for_status()
