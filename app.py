@@ -7,6 +7,7 @@ st.set_page_config(page_title="IND320 - Energy Data", layout="wide")
 pages = [
     st.Page("views/home.py", title="Home", default=True),
     st.Page("views/data.py", title="Reservoir Data"),
+    st.Page("views/weather.py", title="Meteorological Data"),
     st.Page("views/four.py", title="ENTSO-E Data"),
 ]
 
