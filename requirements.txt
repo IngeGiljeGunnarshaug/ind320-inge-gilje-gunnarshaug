@@ -1,6 +1,8 @@
 streamlit>=1.36.0
 pandas
-matplotlib
-pymongo[srv]
-python-dotenv
+numpy
 requests
+matplotlib
+geopandas
+shapely
+pyproj
