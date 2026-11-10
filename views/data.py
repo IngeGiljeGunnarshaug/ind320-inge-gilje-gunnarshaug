@@ -13,10 +13,12 @@ st.write(
     "interactive tables and time-series plots."
 )
 
-# Use the global geographical area selection.
-area_type = st.session_state["global_area_type"]
-
-st.caption(f"Selected area type: {area_type}")
+# Select geographical area type.
+area_type = st.radio(
+    "Area type",
+    options=["EL", "NO", "VASS"],
+    horizontal=True
+)
 
 # Select the measurement.
 measurement = st.selectbox(
