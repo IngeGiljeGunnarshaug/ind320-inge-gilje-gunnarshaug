@@ -6,3 +6,6 @@ matplotlib
 geopandas
 shapely
 pyproj
+scipy
+statsmodels
+scikit-learn
