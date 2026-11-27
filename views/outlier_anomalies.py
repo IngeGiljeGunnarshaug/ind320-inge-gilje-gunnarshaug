@@ -1,4 +1,5 @@
 import streamlit as st
+from state_utils import show_current_selection
 
 from weather_utils import (
     load_weather,
@@ -15,6 +16,8 @@ from analysis_utils import (
 
 
 st.title("Outliers & Anomalies")
+
+show_current_selection()
 
 st.write(
     "Detect unusual precipitation and temperature observations "

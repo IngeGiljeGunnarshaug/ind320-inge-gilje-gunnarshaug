@@ -2,11 +2,13 @@
 import plotly.express as px
 import pandas as pd
 import streamlit as st
-
+from state_utils import show_current_selection
 from data_utils import load_data, MEASUREMENTS
 
 
 st.title("Reservoir Data")
+
+show_current_selection()
 
 st.write(
     "Explore Norwegian reservoir measurements using "

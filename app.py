@@ -1,4 +1,5 @@
 import streamlit as st
+from state_utils import initialize_session_state
 
 # Application configuration
 st.set_page_config(
@@ -7,6 +8,9 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Initialize shared geographical and temporal selections.
+initialize_session_state()
 
 # Define individual pages
 home = st.Page(

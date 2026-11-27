@@ -1,4 +1,12 @@
 import streamlit as st
+from datetime import date
+from data_utils import load_data
+from state_utils import (
+    update_area_type,
+    update_selected_area,
+    update_date_range,
+    show_current_selection
+)
 
 st.title("Norwegian Energy & Reservoir Dashboard")
 
@@ -15,13 +23,87 @@ st.markdown(
 
 st.divider()
 
-# Placeholder for the interactive map
+# Geographical and temporal selection
 st.subheader("Geographical Selection")
 
-st.info(
-    "An interactive map with geographical area and time "
-    "selection will be implemented here."
+# Available geographical area types
+AREA_TYPES = {
+    "EL": "Price areas",
+    "VO": "Water areas",
+    "NO": "Norway"
+}
+
+# Restore persistent values to temporary widget keys
+st.session_state["_area_type"] = st.session_state.area_type
+
+st.session_state["_date_range"] = (
+    st.session_state.start_date,
+    st.session_state.end_date
 )
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.selectbox(
+        "Area type",
+        options=list(AREA_TYPES),
+        format_func=lambda x: AREA_TYPES[x],
+        key="_area_type",
+        on_change=update_area_type
+    )
+
+with col2:
+    st.date_input(
+        "Historical period",
+        min_value=date(1995, 1, 1),
+        max_value=date.today(),
+        key="_date_range",
+        on_change=update_date_range
+    )
+
+# Load reservoir data for the selected area type and period
+df = load_data(
+    st.session_state.start_date,
+    st.session_state.end_date,
+    st.session_state.area_type
+)
+
+# Identify available geographical areas
+area_numbers = sorted(
+    df["area_number"].dropna().astype(int).unique().tolist()
+)
+
+# Validate the current area selection
+if st.session_state.selected_area not in area_numbers:
+    st.session_state.selected_area = (
+        area_numbers[0] if area_numbers else None
+    )
+
+st.session_state["_selected_area"] = (
+    st.session_state.selected_area
+)
+
+with col3:
+    st.selectbox(
+        "Select area",
+        options=area_numbers,
+        format_func=lambda x: (
+            f"NO{x}"
+            if st.session_state.area_type == "EL"
+            else f"Area {x}"
+        ),
+        key="_selected_area",
+        on_change=update_selected_area
+    )
+
+show_current_selection()
+
+if df.empty:
+    st.warning("No reservoir data for the selected period.")
+
+# Placeholder for the future map
+st.info("Interactive GeoJSON map will be implemented here.")
+
 
 st.divider()
 

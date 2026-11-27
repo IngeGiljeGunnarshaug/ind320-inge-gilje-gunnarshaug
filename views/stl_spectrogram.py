@@ -1,7 +1,7 @@
 
 import pandas as pd
 import streamlit as st
-
+from state_utils import show_current_selection
 from data_utils import load_data
 from analysis_utils import (
     prepare_weekly_series,
@@ -11,6 +11,8 @@ from analysis_utils import (
 
 
 st.title("STL & Spectrogram")
+
+show_current_selection()
 
 st.write(
     "Analyze long-term seasonal patterns and frequency "

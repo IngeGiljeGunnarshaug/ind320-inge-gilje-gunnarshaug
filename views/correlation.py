@@ -1,6 +1,9 @@
 import streamlit as st
+from state_utils import show_current_selection
 
 st.title("Weather & Reservoir Correlation")
+
+show_current_selection()
 
 st.write(
     "Explore relationships between meteorological properties "
