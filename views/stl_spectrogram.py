@@ -1,8 +1,7 @@
 
-import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
-
+from state_utils import show_current_selection
 from data_utils import load_data
 from analysis_utils import (
     prepare_weekly_series,
@@ -12,6 +11,8 @@ from analysis_utils import (
 
 
 st.title("STL & Spectrogram")
+
+show_current_selection()
 
 st.write(
     "Analyze long-term seasonal patterns and frequency "
@@ -76,8 +77,12 @@ with tab_stl:
         robust=robust
     )
 
-    st.pyplot(fig)
-    plt.close(fig)
+    st.plotly_chart(
+        fig,
+        use_container_width=True,
+        theme="streamlit",
+        key="stl_chart"
+    )
 
     col1, col2, col3 = st.columns(3)
 
@@ -121,8 +126,12 @@ with tab_spectrogram:
         overlap=overlap
     )
 
-    st.pyplot(fig)
-    plt.close(fig)
+    st.plotly_chart(
+        fig,
+        use_container_width=True,
+        theme="streamlit",
+        key="spectrogram_chart"
+    )
 
     st.info(
         "A strong signal near 1 cycle/year indicates "

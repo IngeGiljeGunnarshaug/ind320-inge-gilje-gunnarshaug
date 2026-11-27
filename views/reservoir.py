@@ -1,12 +1,14 @@
 
-import matplotlib.pyplot as plt
+import plotly.express as px
 import pandas as pd
 import streamlit as st
-
+from state_utils import show_current_selection
 from data_utils import load_data, MEASUREMENTS
 
 
 st.title("Reservoir Data")
+
+show_current_selection()
 
 st.write(
     "Explore Norwegian reservoir measurements using "
@@ -98,29 +100,49 @@ with tab_plots:
 
     st.subheader("Reservoir Time Series")
 
-    fig, ax = plt.subplots(figsize=(11, 5))
+    # Prepare data for Plotly.
+    plot_df = df.sort_values("date").copy()
 
-    for area_number, group in df.groupby("area_number"):
-        group = group.sort_values("date")
-
-        ax.plot(
-            group["date"],
-            group[measurement],
-            label=f"Area {int(area_number)}",
-            linewidth=1.5
-        )
-
-    ax.set_title(
-        f"{MEASUREMENTS[measurement]} - {area_type}"
+    plot_df["Area"] = (
+        "Area " + plot_df["area_number"].astype(int).astype(str)
     )
 
-    ax.set_xlabel("Date")
-    ax.set_ylabel(MEASUREMENTS[measurement])
-    ax.grid(alpha=0.3)
-    ax.legend(title="Area number")
+    # Create an interactive time-series plot.
+    fig = px.line(
+        plot_df,
+        x="date",
+        y=measurement,
+        color="Area",
+        title=f"{MEASUREMENTS[measurement]} - {area_type}",
+        labels={
+            "date": "Date",
+            measurement: MEASUREMENTS[measurement],
+            "Area": "Area number"
+        },
+        color_discrete_sequence=[
+            "#007F86",
+            "#16324F",
+            "#E9A23B",
+            "#568CB5",
+            "#729B79",
+            "#9467BD",
+            "#C76B6B"
+        ]
+    )
 
-    fig.autofmt_xdate()
-    fig.tight_layout()
+    # Customise the chart appearance.
+    fig.update_traces(line=dict(width=2))
 
-    st.pyplot(fig)
-    plt.close(fig)
+    fig.update_layout(
+        hovermode="x unified",
+        height=500,
+        margin=dict(l=20, r=20, t=60, b=20)
+    )
+
+    # Display the interactive plot.
+    st.plotly_chart(
+        fig,
+        use_container_width=True,
+        theme="streamlit"
+    )
+
