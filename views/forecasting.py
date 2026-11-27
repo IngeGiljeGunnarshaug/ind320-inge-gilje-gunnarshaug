@@ -84,12 +84,38 @@ with st.form("forecast_configuration"):
             )
         )
 
+    # Electricity data is available for electricity
+    # price areas and Norway as a whole.
+    available_sources = [
+        "weather",
+        "currency"
+    ]
+
+    if area_type in ["EL", "NO"]:
+
+        available_sources.append("electricity")
+
+    default_sources = [
+        source
+        for source in defaults["sources"]
+        if source in available_sources
+    ]
+
     sources = st.multiselect(
         "External data sources",
-        options=["weather", "currency"],
-        default=list(defaults["sources"]),
-        format_func=lambda x: x.capitalize()
+        options=available_sources,
+        default=default_sources,
+        format_func=lambda x: x.capitalize(),
+        key=f"forecast_sources_{area_type}"
     )
+
+    if area_type == "VASS":
+
+        st.caption(
+            "Electricity transfers are unavailable for "
+            "VASS regions because their geographical "
+            "boundaries differ from electricity price areas."
+        )
 
     st.caption(
         "Reservoir observations are always included."

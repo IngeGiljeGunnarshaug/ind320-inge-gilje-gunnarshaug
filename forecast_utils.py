@@ -14,7 +14,8 @@ from data_utils import (
     load_data,
     load_weather,
     aggregate_weekly_weather,
-    download_exchange_rates
+    download_exchange_rates,
+    load_weekly_electricity
 )
 
 from map_utils import get_weather_locations
@@ -77,6 +78,7 @@ def prepare_forecast_data(
     ].copy()
 
     if reservoir.empty:
+
         raise ValueError(
             "No reservoir observations found."
         )
@@ -91,6 +93,7 @@ def prepare_forecast_data(
     df.index = pd.to_datetime(df.index)
 
     if not (df.index.dayofweek == 6).all():
+
         raise ValueError(
             "Expected Sunday reservoir observation dates."
         )
@@ -104,7 +107,10 @@ def prepare_forecast_data(
 
     download_end = df.index.max()
 
-    # Download and aggregate weather.
+    # --------------------------------------------------
+    # WEATHER
+    # --------------------------------------------------
+
     if "weather" in sources:
 
         points = get_weather_locations(
@@ -138,7 +144,10 @@ def prepare_forecast_data(
             "precipitation_sum"
         )
 
-    # Download and aggregate exchange rates.
+    # --------------------------------------------------
+    # CURRENCY
+    # --------------------------------------------------
+
     if "currency" in sources:
 
         currency = download_exchange_rates(
@@ -154,10 +163,21 @@ def prepare_forecast_data(
             currency_weekly[["EUR", "USD"]]
         )
 
+    # --------------------------------------------------
+    # ELECTRICITY
+    # --------------------------------------------------
+
     if "electricity" in sources:
 
-        raise NotImplementedError(
-            "Direct ENTSO-E retrieval is not implemented yet."
+        electricity_weekly = load_weekly_electricity(
+            area_type=area_type,
+            area_number=area_number,
+            start_date=download_start,
+            end_date=download_end
+        )
+
+        df = df.join(
+            electricity_weekly[["export", "import"]]
         )
 
     df.index.name = "date"
