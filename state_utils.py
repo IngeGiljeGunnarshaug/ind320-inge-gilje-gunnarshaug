@@ -20,13 +20,19 @@ def initialize_session_state():
 
 
 def update_area_type():
-    """Reset the selected area when the area type changes."""
+    """Update the geographical area type."""
 
-    st.session_state.area_type = (
-        st.session_state["_area_type"]
-    )
+    area_type = st.session_state["_area_type"]
 
-    st.session_state.selected_area = None
+    if area_type is None:
+        st.session_state["_area_type"] = (
+            st.session_state.area_type
+        )
+        return
+
+    if area_type != st.session_state.area_type:
+        st.session_state.area_type = area_type
+        st.session_state.selected_area = None
 
 
 def update_selected_area():

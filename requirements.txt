@@ -10,3 +10,5 @@ scipy
 statsmodels
 scikit-learn
 plotly
+folium
+streamlit-folium
