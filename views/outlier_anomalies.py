@@ -1,5 +1,3 @@
-
-import matplotlib.pyplot as plt
 import streamlit as st
 
 from weather_utils import (
@@ -93,8 +91,12 @@ with tab_spc:
         n_std=n_std
     )
 
-    st.pyplot(fig)
-    plt.close(fig)
+    st.plotly_chart(
+        fig,
+        use_container_width=True,
+        theme="streamlit",
+        key="precipitation_outliers_chart"
+    )
 
     # Summary statistics.
     total_observations = len(hourly_weather)
@@ -159,8 +161,12 @@ with tab_lof:
         n_neighbors=n_neighbors
     )
 
-    st.pyplot(fig)
-    plt.close(fig)
+    st.plotly_chart(
+        fig,
+        use_container_width=True,
+        theme="streamlit",
+        key="temperature_anomalies_chart"
+    )
 
     # Summary statistics.
     total_observations = len(hourly_weather)

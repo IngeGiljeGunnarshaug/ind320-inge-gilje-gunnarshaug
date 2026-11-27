@@ -1,7 +1,8 @@
-
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 from scipy.signal import spectrogram
 from statsmodels.tsa.seasonal import STL
@@ -39,8 +40,9 @@ def prepare_weekly_series(df):
 
 def plot_stl(series, period=52, seasonal=13,
              trend=105, robust=True):
-    """STL decomposition of weekly reservoir filling."""
+    """Interactive STL decomposition of weekly reservoir filling."""
 
+    # Perform STL decomposition
     result = STL(
         series,
         period=period,
@@ -49,17 +51,78 @@ def plot_stl(series, period=52, seasonal=13,
         robust=robust
     ).fit()
 
-    fig = result.plot()
-    fig.set_size_inches(12, 9)
-
-    fig.suptitle(
-        "STL Decomposition of Reservoir Filling "
-        f"(seasonal={seasonal}, trend={trend}, robust={robust})",
-        fontsize=13
+    # Create four subplots with a shared time axis
+    fig = make_subplots(
+        rows=4,
+        cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.06,
+        subplot_titles=[
+            "Observed",
+            "Trend",
+            "Seasonal",
+            "Residual"
+        ]
     )
 
-    fig.tight_layout()
+    # Components and corresponding theme colours
+    components = [
+        (series, "Observed", "#007F86"),
+        (result.trend, "Trend", "#16324F"),
+        (result.seasonal, "Seasonal", "#E9A23B"),
+        (result.resid, "Residual", "#568CB5")
+    ]
+
+    # Add each component to its own subplot
+    for row, (values, name, color) in enumerate(
+        components, start=1
+    ):
+        fig.add_trace(
+            go.Scatter(
+                x=series.index,
+                y=values,
+                mode="lines",
+                name=name,
+                line=dict(color=color, width=1.5),
+                hovertemplate=(
+                    "%{x|%Y-%m-%d}<br>"
+                    "%{y:.3f}<extra></extra>"
+                )
+            ),
+            row=row,
+            col=1
+        )
+
+    # Add zero reference line to residuals
+    fig.add_hline(
+        y=0,
+        line_dash="dash",
+        line_color="#9CA3AF",
+        row=4,
+        col=1
+    )
+
+    # Customise figure layout
+    fig.update_layout(
+        title=(
+            "STL Decomposition of Reservoir Filling"
+            f"<br><sup>Seasonal={seasonal}, "
+            f"Trend={trend}, Robust={robust}</sup>"
+        ),
+        height=850,
+        showlegend=False,
+        hovermode="x unified",
+        margin=dict(l=60, r=30, t=100, b=50)
+    )
+
+    fig.update_xaxes(title_text="Date", row=4, col=1)
+    fig.update_yaxes(title_text="Fill fraction", row=1, col=1)
+    fig.update_yaxes(title_text="Trend", row=2, col=1)
+    fig.update_yaxes(title_text="Seasonal", row=3, col=1)
+    fig.update_yaxes(title_text="Residual", row=4, col=1)
+
     return fig, result
+
 
 
 def plot_spectrogram(series, window_length=156, overlap=130):
@@ -98,45 +161,58 @@ def plot_spectrogram(series, window_length=156, overlap=130):
     # Convert power to decibels for better visualization
     power_db = 10 * np.log10(np.maximum(power, 1e-12))
 
-    # Plot the time-frequency representation
-    fig, ax = plt.subplots(figsize=(14, 6))
-
-    mesh = ax.pcolormesh(
-        dates,
-        frequencies,
-        power_db,
-        shading="auto",
-        cmap="viridis"
+    # Create an interactive time-frequency heatmap
+    fig = go.Figure(
+        data=go.Heatmap(
+            x=dates,
+            y=frequencies,
+            z=power_db,
+            colorscale=[
+                [0.00, "#16324F"],
+                [0.35, "#246582"],
+                [0.65, "#007F86"],
+                [0.85, "#8CC5A8"],
+                [1.00, "#E9A23B"]
+            ],
+            colorbar=dict(title="Power (dB)"),
+            hovertemplate=(
+                "Date: %{x|%Y-%m-%d}<br>"
+                "Frequency: %{y:.2f} cycles/year<br>"
+                "Power: %{z:.2f} dB"
+                "<extra></extra>"
+            )
+        )
     )
 
     # Reference line for annual seasonality
-    ax.axhline(
-        1,
-        color="red",
-        linestyle="--",
-        linewidth=1.5,
-        label="Annual cycle (1 cycle/year)"
+    fig.add_hline(
+        y=1,
+        line_dash="dash",
+        line_color="#FFFFFF",
+        line_width=2,
+        annotation_text="Annual cycle (1 cycle/year)",
+        annotation_position="top left",
+        annotation_font_color="#FFFFFF",
+        annotation_bgcolor="#16324F"
     )
 
-    ax.set(
+    # Customise figure layout
+    fig.update_layout(
         title="Spectrogram of Reservoir Filling",
-        xlabel="Year",
-        ylabel="Frequency (cycles/year)"
+        xaxis_title="Year",
+        yaxis_title="Frequency (cycles/year)",
+        height=500,
+        margin=dict(l=60, r=30, t=60, b=50)
     )
 
-    ax.set_ylim(0, 4)
-    ax.set_yticks(np.arange(0, 5, 1))
-    ax.legend()
-
-    fig.colorbar(
-        mesh,
-        ax=ax,
-        label="Power (dB)"
+    # Focus on the low-frequency components
+    fig.update_yaxes(
+        range=[0, 4],
+        dtick=1
     )
-
-    fig.tight_layout()
 
     return fig
+
 
 def dct_highpass(series, cutoff=30):
     """Remove the lowest-frequency DCT components from a time series."""
@@ -197,55 +273,80 @@ def plot_precipitation_outliers(weather, cutoff=100, n_std=3):
         "upper_limit": upper[outliers]
     })
 
-    # Plot the original precipitation and SPC boundaries
-    fig, ax = plt.subplots(figsize=(15, 5))
+    # Create an interactive Plotly figure
+    fig = go.Figure()
 
-    ax.plot(
-        precipitation.index,
-        values,
-        color="steelblue",
-        linewidth=0.7,
-        label="Average precipitation"
+    # Original precipitation time series
+    fig.add_trace(go.Scatter(
+        x=precipitation.index,
+        y=values,
+        mode="lines",
+        name="Average precipitation",
+        line=dict(color="#007F86", width=1)
+    ))
+
+    # Upper control limit
+    fig.add_trace(go.Scatter(
+        x=precipitation.index,
+        y=upper,
+        mode="lines",
+        name="Upper control limit",
+        line=dict(
+            color="#E9A23B",
+            width=1.5,
+            dash="dash"
+        )
+    ))
+
+    # Lower control limit
+    fig.add_trace(go.Scatter(
+        x=precipitation.index,
+        y=lower,
+        mode="lines",
+        name="Lower control limit",
+        line=dict(
+            color="#E9A23B",
+            width=1.5,
+            dash="dash"
+        )
+    ))
+
+    # Highlight detected outliers
+    fig.add_trace(go.Scatter(
+        x=precipitation.index[outliers],
+        y=values[outliers],
+        mode="markers",
+        name="Outliers",
+        marker=dict(
+            color="#C0392B",
+            size=5
+        )
+    ))
+
+    # Customise figure layout
+    fig.update_layout(
+        title=(
+            f"NO3 Precipitation Outliers — "
+            f"DCT cutoff={cutoff}, k={n_std}"
+        ),
+        xaxis_title="Date",
+        yaxis_title="Average precipitation (mm/hour)",
+        height=550,
+        hovermode="x unified",
+        margin=dict(l=40, r=30, t=80, b=40),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="left",
+            x=0
+        )
     )
 
-    ax.plot(
-        precipitation.index,
-        upper,
-        color="darkorange",
-        linestyle="--",
-        linewidth=1,
-        label="Upper control limit"
+    # Add an interactive date range slider
+    fig.update_xaxes(
+        rangeslider_visible=True
     )
-
-    ax.plot(
-        precipitation.index,
-        lower,
-        color="darkorange",
-        linestyle="--",
-        linewidth=1,
-        label="Lower control limit"
-    )
-
-    # Highlight outliers using the original precipitation values
-    ax.scatter(
-        precipitation.index[outliers],
-        values[outliers],
-        color="red",
-        s=12,
-        zorder=3,
-        label="Outliers"
-    )
-
-    ax.set(
-        title=f"NO3 Precipitation Outliers — DCT cutoff={cutoff}, k={n_std}",
-        xlabel="Date",
-        ylabel="Average precipitation (mm/hour)"
-    )
-
-    ax.legend()
-    ax.grid(alpha=0.3)
-
-    plt.tight_layout()
 
     # Print summary statistics
     print(f"Robust standard deviation: {robust_std:.4f}")
@@ -279,36 +380,69 @@ def plot_temperature_anomalies(weather, contamination=0.01, n_neighbors=20):
         "lof_score": -lof.negative_outlier_factor_[anomalies]
     })
 
-    # Plot the original temperature series
-    fig, ax = plt.subplots(figsize=(15, 5))
+    # Create an interactive Plotly figure
+    fig = go.Figure()
 
-    ax.plot(
-        temperature.index,
-        temperature,
-        color="steelblue",
-        linewidth=0.7,
-        label="Average temperature"
+    # Original temperature time series
+    fig.add_trace(go.Scatter(
+        x=temperature.index,
+        y=temperature.to_numpy(),
+        mode="lines",
+        name="Average temperature",
+        line=dict(
+            color="#007F86",
+            width=1
+        ),
+        hovertemplate=(
+            "Date: %{x|%Y-%m-%d %H:%M}<br>"
+            "Temperature: %{y:.2f} °C"
+            "<extra></extra>"
+        )
+    ))
+
+    # Highlight detected LOF anomalies
+    fig.add_trace(go.Scatter(
+        x=temperature.index[anomalies],
+        y=temperature.to_numpy()[anomalies],
+        mode="markers",
+        name="LOF anomalies",
+        marker=dict(
+            color="#C0392B",
+            size=6
+        ),
+        customdata=anomaly_df["lof_score"].to_numpy(),
+        hovertemplate=(
+            "Date: %{x|%Y-%m-%d %H:%M}<br>"
+            "Temperature: %{y:.2f} °C<br>"
+            "LOF score: %{customdata:.3f}"
+            "<extra></extra>"
+        )
+    ))
+
+    # Customise figure layout
+    fig.update_layout(
+        title=(
+            f"NO3 Temperature Anomalies — "
+            f"LOF ({contamination:.1%})"
+        ),
+        xaxis_title="Date",
+        yaxis_title="Average temperature (°C)",
+        height=550,
+        hovermode="closest",
+        margin=dict(l=40, r=30, t=80, b=40),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="left",
+            x=0
+        )
     )
 
-    # Highlight anomalous observations
-    ax.scatter(
-        temperature.index[anomalies],
-        temperature.to_numpy()[anomalies],
-        color="red",
-        s=15,
-        zorder=3,
-        label="LOF anomalies"
+    # Add an interactive date range slider
+    fig.update_xaxes(
+        rangeslider_visible=True
     )
-
-    ax.set(
-        title=f"NO3 Temperature Anomalies — LOF ({contamination:.1%})",
-        xlabel="Date",
-        ylabel="Average temperature (°C)"
-    )
-
-    ax.legend()
-    ax.grid(alpha=0.3)
-    plt.tight_layout()
 
     # Print summary statistics
     print(f"Total observations: {len(temperature)}")

@@ -1,6 +1,6 @@
 import calendar
 
-import matplotlib.pyplot as plt
+import plotly.express as px
 import pandas as pd
 import streamlit as st
 
@@ -10,6 +10,11 @@ from mongo_utils import (
     load_entsoe
 )
 
+# Consistent colours for electricity transfer directions.
+DIRECTION_COLORS = {
+    "Import": "#007F86",
+    "Export": "#16324F"
+}
 
 st.title("ENTSO-E Electricity Transfers")
 
@@ -68,21 +73,47 @@ with left:
 
         if annual_summary.sum() > 0:
 
-            fig, ax = plt.subplots(figsize=(6, 5))
-
-            ax.pie(
-                annual_summary.values,
-                labels=annual_summary.index,
-                autopct="%1.1f%%",
-                startangle=90
+            # Create an interactive annual pie chart.
+            fig = px.pie(
+                names=annual_summary.index.str.title(),
+                values=annual_summary.values,
+                title=f"{connection} - {year}",
+                color=annual_summary.index.str.title(),
+                color_discrete_map=DIRECTION_COLORS,
+                hole=0.4
             )
 
-            ax.set_title(
-                f"{connection} - {year}"
+            # Customise labels and hover information.
+            fig.update_traces(
+                textposition="inside",
+                textinfo="percent+label",
+                hovertemplate=(
+                    "%{label}<br>"
+                    "Total energy: %{value:,.0f} MWh<br>"
+                    "Share: %{percent}"
+                    "<extra></extra>"
+                )
             )
 
-            st.pyplot(fig)
-            plt.close(fig)
+            fig.update_layout(
+                height=450,
+                margin=dict(l=20, r=20, t=60, b=20),
+                legend=dict(
+                    orientation="h",
+                    yanchor="top",
+                    y=-0.05,
+                    xanchor="center",
+                    x=0.5
+                )
+            )
+
+            st.plotly_chart(
+                fig,
+                use_container_width=True,
+                theme="streamlit",
+                key="annual_electricity_chart"
+            )
+
 
             # Display the underlying annual totals.
             st.dataframe(
@@ -132,36 +163,57 @@ with right:
                 .sum()
             )
 
-            fig, ax = plt.subplots(figsize=(8, 5))
+            # Prepare data for Plotly.
+            plot_df = monthly_summary.sort_values("time").copy()
 
-            # Draw one line for each direction.
-            for direction, group in monthly_summary.groupby(
-                "direction"
-            ):
-
-                group = group.sort_values("time")
-
-                ax.plot(
-                    group["time"],
-                    group["mwh"],
-                    label=direction,
-                    linewidth=1.2
-                )
-
-            ax.set_title(
-                f"{connection} - {year}"
+            plot_df["direction"] = (
+                plot_df["direction"].str.title()
             )
 
-            ax.set_xlabel("Date")
-            ax.set_ylabel("Electricity transfer (MWh)")
-            ax.grid(alpha=0.3)
-            ax.legend(title="Direction")
+            # Create an interactive electricity transfer plot.
+            fig = px.line(
+                plot_df,
+                x="time",
+                y="mwh",
+                color="direction",
+                title=f"{connection} - {year}",
+                color_discrete_map=DIRECTION_COLORS,
+                labels={
+                    "time": "Date",
+                    "mwh": "Electricity transfer (MWh)",
+                    "direction": "Direction"
+                }
+            )
 
-            fig.autofmt_xdate()
-            fig.tight_layout()
+            fig.update_traces(
+                line=dict(width=1.5)
+            )
 
-            st.pyplot(fig)
-            plt.close(fig)
+            fig.update_layout(
+                height=450,
+                hovermode="x unified",
+                margin=dict(l=20, r=20, t=60, b=20),
+                legend=dict(
+                    orientation="h",
+                    yanchor="top",
+                    y=-0.25,
+                    xanchor="center",
+                    x=0.5
+                )
+            )
+
+            # Add an interactive date range slider.
+            fig.update_xaxes(
+                rangeslider_visible=True
+            )
+
+            st.plotly_chart(
+                fig,
+                use_container_width=True,
+                theme="streamlit",
+                key="monthly_electricity_chart"
+            )
+
 
         else:
             st.warning("No observations for the selected months.")

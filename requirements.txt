@@ -9,3 +9,4 @@ pyproj
 scipy
 statsmodels
 scikit-learn
+plotly

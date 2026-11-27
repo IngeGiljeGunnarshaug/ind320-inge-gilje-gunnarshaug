@@ -1,5 +1,4 @@
 
-import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
 
@@ -76,8 +75,12 @@ with tab_stl:
         robust=robust
     )
 
-    st.pyplot(fig)
-    plt.close(fig)
+    st.plotly_chart(
+        fig,
+        use_container_width=True,
+        theme="streamlit",
+        key="stl_chart"
+    )
 
     col1, col2, col3 = st.columns(3)
 
@@ -121,8 +124,12 @@ with tab_spectrogram:
         overlap=overlap
     )
 
-    st.pyplot(fig)
-    plt.close(fig)
+    st.plotly_chart(
+        fig,
+        use_container_width=True,
+        theme="streamlit",
+        key="spectrogram_chart"
+    )
 
     st.info(
         "A strong signal near 1 cycle/year indicates "
