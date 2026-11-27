@@ -37,6 +37,17 @@ WEATHER_AGGREGATIONS = {
     "et0_fao_evapotranspiration": "sum"
 }
 
+HOURLY_WEATHER_MEASUREMENTS = {
+    "temperature_2m": "Temperature (°C)",
+    "precipitation": "Precipitation (mm/hour)",
+    "rain": "Rain (mm/hour)",
+    "snowfall": "Snowfall (cm/hour)",
+    "relative_humidity_2m": "Relative humidity (%)",
+    "wind_speed_10m": "Wind speed (km/h)",
+    "shortwave_radiation": "Solar radiation (W/m²)",
+    "et0_fao_evapotranspiration": "Evapotranspiration (mm/hour)"
+}
+
 @st.cache_data(ttl=3600, show_spinner="Downloading NVE data...")
 def load_data(start_date, end_date, area_type):
     """
@@ -112,15 +123,27 @@ def load_data(start_date, end_date, area_type):
     return df
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def load_weather(points, start_date, end_date, variables):
-    """Download daily ERA5 weather and calculate spatial averages."""
+def load_weather(
+    points,
+    start_date,
+    end_date,
+    variables,
+    resolution="daily"
+):
+    """Download ERA5 weather and calculate spatial averages."""
+
+    if resolution not in ["daily", "hourly"]:
+        raise ValueError("Resolution must be daily or hourly.")
+
+    if points.empty:
+        raise ValueError("No weather locations supplied.")
 
     params = {
         "latitude": ",".join(points["latitude"].astype(str)),
         "longitude": ",".join(points["longitude"].astype(str)),
         "start_date": pd.Timestamp(start_date).strftime("%Y-%m-%d"),
         "end_date": pd.Timestamp(end_date).strftime("%Y-%m-%d"),
-        "daily": ",".join(variables),
+        resolution: ",".join(variables),
         "models": "era5",
         "timezone": "GMT"
     }
@@ -138,13 +161,13 @@ def load_weather(points, start_date, end_date, variables):
         data = [data]
 
     if len(data) != len(points):
-        raise ValueError("Unexpected number of weather locations")
+        raise ValueError("Unexpected number of weather locations.")
 
     df = pd.concat([
-        pd.DataFrame(location["daily"])
+        pd.DataFrame(location[resolution])
         for location in data
     ], ignore_index=True)
 
     df["time"] = pd.to_datetime(df["time"])
 
-    return df.groupby("time").mean()
+    return df.groupby("time")[list(variables)].mean().sort_index()

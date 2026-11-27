@@ -249,45 +249,57 @@ def robust_spc(residual, baseline, n_std=3):
 
     return lower, upper, outliers, robust_std
 
-def plot_precipitation_outliers(weather, cutoff=100, n_std=3):
-    """Plot average precipitation with DCT-based robust SPC limits."""
+def plot_weather_outliers(
+    weather,
+    variable="temperature_2m",
+    variable_label="Temperature (°C)",
+    cutoff=100,
+    n_std=3
+):
+    """Plot weather observations with DCT-based robust SPC limits."""
 
-    # Extract the original precipitation series
-    precipitation = weather["precipitation"]
-    values = precipitation.to_numpy()
+    series = weather[variable].sort_index()
+    values = series.to_numpy(dtype=float)
 
-    # Remove low-frequency variation using the DCT
+    if not np.isfinite(values).all():
+        raise ValueError("Weather series contains missing or invalid values.")
+
+    if not 0 <= cutoff < len(values):
+        raise ValueError("DCT cutoff must be smaller than the series length.")
+
+    # Remove low-frequency variation.
     residual = dct_highpass(values, cutoff=cutoff)
     baseline = values - residual
 
-    # Calculate robust SPC limits
+    # Calculate robust SPC limits.
     lower, upper, outliers, robust_std = robust_spc(
-        residual, baseline, n_std=n_std
+        residual,
+        baseline,
+        n_std=n_std
     )
 
-    # Store detected outliers with their original precipitation values
+    # Store detected outliers.
     outlier_df = pd.DataFrame({
-        "time": precipitation.index[outliers],
-        "precipitation": values[outliers],
+        "time": series.index[outliers],
+        variable: values[outliers],
         "lower_limit": lower[outliers],
         "upper_limit": upper[outliers]
     })
 
-    # Create an interactive Plotly figure
     fig = go.Figure()
 
-    # Original precipitation time series
+    # Original weather observations.
     fig.add_trace(go.Scatter(
-        x=precipitation.index,
+        x=series.index,
         y=values,
         mode="lines",
-        name="Average precipitation",
+        name=variable_label,
         line=dict(color="#007F86", width=1)
     ))
 
-    # Upper control limit
+    # Upper control limit.
     fig.add_trace(go.Scatter(
-        x=precipitation.index,
+        x=series.index,
         y=upper,
         mode="lines",
         name="Upper control limit",
@@ -298,9 +310,9 @@ def plot_precipitation_outliers(weather, cutoff=100, n_std=3):
         )
     ))
 
-    # Lower control limit
+    # Lower control limit.
     fig.add_trace(go.Scatter(
-        x=precipitation.index,
+        x=series.index,
         y=lower,
         mode="lines",
         name="Lower control limit",
@@ -311,9 +323,9 @@ def plot_precipitation_outliers(weather, cutoff=100, n_std=3):
         )
     ))
 
-    # Highlight detected outliers
+    # Highlight detected outliers.
     fig.add_trace(go.Scatter(
-        x=precipitation.index[outliers],
+        x=series.index[outliers],
         y=values[outliers],
         mode="markers",
         name="Outliers",
@@ -323,14 +335,13 @@ def plot_precipitation_outliers(weather, cutoff=100, n_std=3):
         )
     ))
 
-    # Customise figure layout
     fig.update_layout(
         title=(
-            f"NO3 Precipitation Outliers — "
-            f"DCT cutoff={cutoff}, k={n_std}"
+            f"{variable_label} — DCT & SPC"
+            f"<br><sup>Cutoff={cutoff}, k={n_std}</sup>"
         ),
         xaxis_title="Date",
-        yaxis_title="Average precipitation (mm/hour)",
+        yaxis_title=variable_label,
         height=550,
         hovermode="x unified",
         margin=dict(l=40, r=30, t=80, b=40),
@@ -343,28 +354,33 @@ def plot_precipitation_outliers(weather, cutoff=100, n_std=3):
         )
     )
 
-    # Add an interactive date range slider
-    fig.update_xaxes(
-        rangeslider_visible=True
-    )
-
-    # Print summary statistics
-    print(f"Robust standard deviation: {robust_std:.4f}")
-    print(f"Number of outliers: {outliers.sum()}")
-    print(f"Outlier percentage: {outliers.mean() * 100:.2f}%")
+    fig.update_xaxes(rangeslider_visible=True)
 
     return fig, outlier_df
 
-def plot_temperature_anomalies(weather, contamination=0.01, n_neighbors=20):
-    """Detect and plot temperature anomalies using Local Outlier Factor."""
+def plot_weather_anomalies(
+    weather,
+    variable="temperature_2m",
+    variable_label="Temperature (°C)",
+    contamination=0.01,
+    n_neighbors=20
+):
+    """Detect weather anomalies using Local Outlier Factor."""
 
-    # Extract the spatially averaged temperature series
-    temperature = weather["temperature"].dropna()
+    series = weather[variable].sort_index().dropna()
+    values = series.to_numpy(dtype=float)
 
-    # LOF expects a 2D feature matrix
-    X = temperature.to_numpy().reshape(-1, 1)
+    if not np.isfinite(values).all():
+        raise ValueError("Weather series contains invalid values.")
 
-    # Fit LOF and classify observations
+    if not 1 <= n_neighbors < len(series):
+        raise ValueError(
+            "Number of neighbors must be smaller than the series length."
+        )
+
+    # LOF expects a two-dimensional feature matrix.
+    X = values.reshape(-1, 1)
+
     lof = LocalOutlierFactor(
         n_neighbors=n_neighbors,
         contamination=contamination
@@ -373,37 +389,36 @@ def plot_temperature_anomalies(weather, contamination=0.01, n_neighbors=20):
     labels = lof.fit_predict(X)
     anomalies = labels == -1
 
-    # Store anomalous observations and their LOF scores
+    # Store detected anomalies.
     anomaly_df = pd.DataFrame({
-        "time": temperature.index[anomalies],
-        "temperature": temperature.to_numpy()[anomalies],
+        "time": series.index[anomalies],
+        variable: values[anomalies],
         "lof_score": -lof.negative_outlier_factor_[anomalies]
     })
 
-    # Create an interactive Plotly figure
     fig = go.Figure()
 
-    # Original temperature time series
+    # Original weather observations.
     fig.add_trace(go.Scatter(
-        x=temperature.index,
-        y=temperature.to_numpy(),
+        x=series.index,
+        y=values,
         mode="lines",
-        name="Average temperature",
+        name=variable_label,
         line=dict(
             color="#007F86",
             width=1
         ),
         hovertemplate=(
             "Date: %{x|%Y-%m-%d %H:%M}<br>"
-            "Temperature: %{y:.2f} °C"
+            f"{variable_label}: %{{y:.2f}}"
             "<extra></extra>"
         )
     ))
 
-    # Highlight detected LOF anomalies
+    # Highlight detected anomalies.
     fig.add_trace(go.Scatter(
-        x=temperature.index[anomalies],
-        y=temperature.to_numpy()[anomalies],
+        x=series.index[anomalies],
+        y=values[anomalies],
         mode="markers",
         name="LOF anomalies",
         marker=dict(
@@ -413,20 +428,20 @@ def plot_temperature_anomalies(weather, contamination=0.01, n_neighbors=20):
         customdata=anomaly_df["lof_score"].to_numpy(),
         hovertemplate=(
             "Date: %{x|%Y-%m-%d %H:%M}<br>"
-            "Temperature: %{y:.2f} °C<br>"
+            f"{variable_label}: %{{y:.2f}}<br>"
             "LOF score: %{customdata:.3f}"
             "<extra></extra>"
         )
     ))
 
-    # Customise figure layout
     fig.update_layout(
         title=(
-            f"NO3 Temperature Anomalies — "
-            f"LOF ({contamination:.1%})"
+            f"{variable_label} — LOF"
+            f"<br><sup>Contamination={contamination:.1%}, "
+            f"Neighbors={n_neighbors}</sup>"
         ),
         xaxis_title="Date",
-        yaxis_title="Average temperature (°C)",
+        yaxis_title=variable_label,
         height=550,
         hovermode="closest",
         margin=dict(l=40, r=30, t=80, b=40),
@@ -439,14 +454,6 @@ def plot_temperature_anomalies(weather, contamination=0.01, n_neighbors=20):
         )
     )
 
-    # Add an interactive date range slider
-    fig.update_xaxes(
-        rangeslider_visible=True
-    )
-
-    # Print summary statistics
-    print(f"Total observations: {len(temperature)}")
-    print(f"Detected anomalies: {anomalies.sum()}")
-    print(f"Anomaly percentage: {anomalies.mean() * 100:.2f}%")
+    fig.update_xaxes(rangeslider_visible=True)
 
     return fig, anomaly_df
