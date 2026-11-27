@@ -457,3 +457,165 @@ def plot_weather_anomalies(
     fig.update_xaxes(rangeslider_visible=True)
 
     return fig, anomaly_df
+
+def calculate_rolling_correlation(
+    reservoir,
+    weather,
+    window=26,
+    lag=0
+):
+    """Calculate rolling Pearson correlation with a weather lag."""
+
+    if window < 2:
+        raise ValueError("Window must contain at least two weeks.")
+
+    if lag < 0:
+        raise ValueError("Lag must be non-negative.")
+
+    reservoir = reservoir.copy().sort_index()
+    weather = weather.copy().sort_index()
+
+    reservoir.index = pd.to_datetime(reservoir.index)
+    weather.index = pd.to_datetime(weather.index)
+
+    # Shift weather dates forward by the selected lag.
+    # Weather at time t-lag is compared with reservoir at time t.
+    weather.index = (
+        weather.index + pd.Timedelta(weeks=lag)
+    )
+
+    # Align both time series.
+    df = pd.concat(
+        [
+            reservoir.rename("reservoir"),
+            weather.rename("weather")
+        ],
+        axis=1
+    ).sort_index()
+
+    # Preserve missing weeks rather than silently skipping them.
+    df = df.asfreq("7D")
+
+    # Calculate rolling Pearson correlation.
+    df["correlation"] = (
+        df["reservoir"]
+        .rolling(
+            window=window,
+            min_periods=window
+        )
+        .corr(df["weather"])
+    )
+
+    return df
+
+def plot_rolling_correlation(
+    df,
+    reservoir_label,
+    weather_label,
+    window=26,
+    lag=0
+):
+    """Plot weather, reservoir and rolling correlation."""
+
+    fig = make_subplots(
+        rows=3,
+        cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.08,
+        row_heights=[0.3, 0.3, 0.4],
+        subplot_titles=[
+            reservoir_label,
+            f"{weather_label} — lagged {lag} weeks",
+            "Sliding-window Pearson correlation"
+        ]
+    )
+
+    # Reservoir measurements.
+    fig.add_trace(
+        go.Scatter(
+            x=df.index,
+            y=df["reservoir"],
+            mode="lines",
+            name=reservoir_label,
+            line=dict(
+                color="#007F86",
+                width=1.5
+            )
+        ),
+        row=1,
+        col=1
+    )
+
+    # Weather observations.
+    fig.add_trace(
+        go.Scatter(
+            x=df.index,
+            y=df["weather"],
+            mode="lines",
+            name=weather_label,
+            line=dict(
+                color="#E9A23B",
+                width=1.5
+            )
+        ),
+        row=2,
+        col=1
+    )
+
+    # Rolling correlation.
+    fig.add_trace(
+        go.Scatter(
+            x=df.index,
+            y=df["correlation"],
+            mode="lines",
+            name="Rolling correlation",
+            line=dict(
+                color="#568CB5",
+                width=2
+            ),
+            hovertemplate=(
+                "%{x|%Y-%m-%d}<br>"
+                "Correlation: %{y:.3f}"
+                "<extra></extra>"
+            )
+        ),
+        row=3,
+        col=1
+    )
+
+    # Zero-correlation reference line.
+    fig.add_hline(
+        y=0,
+        line_dash="dash",
+        line_color="#9CA3AF",
+        row=3,
+        col=1
+    )
+
+    fig.update_yaxes(
+        range=[-1.05, 1.05],
+        dtick=0.5,
+        title_text="Correlation",
+        row=3,
+        col=1
+    )
+
+    fig.update_xaxes(
+        title_text="Date",
+        row=3,
+        col=1
+    )
+
+    fig.update_layout(
+        title=(
+            "Weather and Reservoir Correlation"
+            f"<br><sup>Window={window} weeks, "
+            f"Lag={lag} weeks</sup>"
+        ),
+        height=800,
+        showlegend=False,
+        hovermode="x unified",
+        margin=dict(l=60, r=30, t=100, b=50)
+    )
+
+    return fig

@@ -171,3 +171,48 @@ def load_weather(
     df["time"] = pd.to_datetime(df["time"])
 
     return df.groupby("time")[list(variables)].mean().sort_index()
+
+def aggregate_weekly_weather(
+    weather,
+    observation_dates,
+    variable
+):
+    """Aggregate daily weather to the NVE observation weeks."""
+
+    weather = weather.copy().sort_index()
+    weather.index = pd.to_datetime(weather.index)
+
+    aggregation = WEATHER_AGGREGATIONS[variable]
+
+    dates = pd.DatetimeIndex(
+        observation_dates
+    ).sort_values().unique()
+
+    values = []
+
+    for end_date in dates:
+
+        start_date = end_date - pd.Timedelta(days=6)
+
+        daily = weather.loc[
+            start_date:end_date,
+            variable
+        ].dropna()
+
+        # Require a complete week.
+        if len(daily) != 7:
+            value = float("nan")
+
+        elif aggregation == "sum":
+            value = daily.sum()
+
+        else:
+            value = daily.mean()
+
+        values.append(value)
+
+    return pd.Series(
+        values,
+        index=dates,
+        name=variable
+    )
