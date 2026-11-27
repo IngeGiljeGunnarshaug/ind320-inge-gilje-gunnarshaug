@@ -15,3 +15,4 @@ streamlit-folium
 river
 entsoe-py
 python-dotenv
+pymongo
