@@ -4,7 +4,9 @@ import folium
 from pathlib import Path
 from shapely.geometry import Point
 import pandas as pd
+import numpy as np
 from branca.colormap import LinearColormap
+from data_utils import load_weather, WEATHER_AGGREGATIONS
 
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
@@ -236,3 +238,113 @@ def get_clicked_area(gdf, lat, lon):
         return None
 
     return int(clicked.iloc[0]["area_number"])
+
+@st.cache_data
+def get_weather_locations(area_type, area_number, n_locations=5):
+
+    locations = pd.read_csv(
+        DATA_DIR / "sampled_locations.csv"
+    )
+
+    vass_regions = {
+        1: ["RØ", "RS"],
+        2: ["RV"],
+        3: ["RM", "RN"]
+    }
+
+    if area_type == "EL":
+
+        points = locations.loc[
+            (locations["area_type"] == "electricity") &
+            (locations["region"] == f"NO {area_number}")
+        ]
+
+    elif area_type == "VASS":
+
+        points = locations.loc[
+            (locations["area_type"] == "precipitation") &
+            (locations["region"].isin(vass_regions[area_number]))
+        ]
+
+    elif area_type == "NO":
+
+        points = locations.loc[
+            locations["area_type"] == "electricity"
+        ]
+
+    else:
+        raise ValueError(f"Unknown area type: {area_type}")
+
+    if points.empty:
+        raise ValueError("No weather locations found")
+
+    # Select one location per approximate 25 km grid cell.
+    gdf = gpd.GeoDataFrame(
+        points,
+        geometry=gpd.points_from_xy(
+            points["longitude"],
+            points["latitude"]
+        ),
+        crs="EPSG:4326"
+    ).to_crs("EPSG:3035")
+
+    gdf["grid_x"] = np.floor(gdf.geometry.x / 25000)
+    gdf["grid_y"] = np.floor(gdf.geometry.y / 25000)
+
+    gdf = gdf.drop_duplicates(
+        subset=["grid_x", "grid_y"]
+    )
+
+    # Select reproducible sampling locations.
+    points = gdf.sample(
+        n=min(n_locations, len(gdf)),
+        random_state=42
+    )
+
+    return points[["latitude", "longitude"]].reset_index(drop=True)
+
+@st.cache_data(ttl=3600, show_spinner="Downloading weather data...")
+def get_weather_map_values(
+    area_type,
+    area_numbers,
+    map_date,
+    measurement,
+    n_locations=5
+):
+    """Calculate weekly weather values for each geographical area."""
+
+    end_date = pd.Timestamp(map_date)
+    start_date = end_date - pd.Timedelta(days=6)
+
+    values = {}
+
+    for area_number in area_numbers:
+
+        points = get_weather_locations(
+            area_type,
+            area_number,
+            n_locations
+        )
+
+        weather = load_weather(
+            points,
+            start_date,
+            end_date,
+            [measurement]
+        )
+
+        aggregation = WEATHER_AGGREGATIONS[measurement]
+
+        daily_values = weather[measurement].dropna()
+
+        # Require observations for all seven days.
+        if len(daily_values) != 7:
+            values[area_number] = np.nan
+
+        elif aggregation == "sum":
+            values[area_number] = daily_values.sum()
+
+        else:
+            values[area_number] = daily_values.mean()
+
+    return values

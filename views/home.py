@@ -1,6 +1,6 @@
 import streamlit as st
 from datetime import date
-from data_utils import load_data, MEASUREMENTS
+from data_utils import load_data, MEASUREMENTS, WEATHER_MEASUREMENTS
 from state_utils import (
     update_area_type,
     update_selected_area,
@@ -12,7 +12,8 @@ from map_utils import (
     load_geojson,
     create_map,
     get_clicked_area,
-    get_map_values
+    get_map_values,
+    get_weather_map_values
 )
 
 st.title("Norwegian Energy & Reservoir Dashboard")
@@ -130,13 +131,15 @@ if (
 
     with map_col1:
 
+        MAP_MEASUREMENTS = {
+            **MEASUREMENTS,
+            **WEATHER_MEASUREMENTS
+        }
+
         measurement = st.selectbox(
-            "Colour map by",
-            options=[
-                column for column in MEASUREMENTS
-                if column in df.columns
-            ],
-            format_func=lambda x: MEASUREMENTS[x],
+            "Map measurement",
+            options=list(MAP_MEASUREMENTS.keys()),
+            format_func=lambda x: MAP_MEASUREMENTS[x],
             key="map_measurement"
         )
 
@@ -158,11 +161,22 @@ if (
     st.session_state.map_date = map_date
 
     # Retrieve measurements for the selected date.
-    values = get_map_values(
-        df,
-        map_date,
-        measurement
-    )
+    if measurement in WEATHER_MEASUREMENTS:
+
+        values = get_weather_map_values(
+            area_type=st.session_state.area_type,
+            area_numbers=tuple(gdf["area_number"].unique()),
+            map_date=st.session_state.map_date,
+            measurement=measurement
+        )
+
+    else:
+
+        values = get_map_values(
+            df,
+            st.session_state.map_date,
+            measurement
+        )
 
     # Generate the map with measurement-based colouring.
     m = create_map(
@@ -170,7 +184,7 @@ if (
         selected_area=st.session_state.selected_area,
         values=values,
         measurement=measurement,
-        measurement_label=MEASUREMENTS[measurement]
+        measurement_label=MAP_MEASUREMENTS[measurement]
     )
 
     map_data = st_folium(

@@ -15,6 +15,27 @@ MEASUREMENTS = {
     "fill_fraction_change": "Fill ratio change",
 }
 
+OPEN_METEO_URL = "https://archive-api.open-meteo.com/v1/archive"
+
+WEATHER_MEASUREMENTS = {
+    "temperature_2m_mean": "Temperature (°C)",
+    "precipitation_sum": "Precipitation (mm)",
+    "rain_sum": "Rain (mm)",
+    "snowfall_sum": "Snowfall (cm)",
+    "wind_speed_10m_mean": "Wind speed (km/h)",
+    "shortwave_radiation_sum": "Solar radiation (MJ/m²)",
+    "et0_fao_evapotranspiration": "Evapotranspiration (mm)"
+}
+
+WEATHER_AGGREGATIONS = {
+    "temperature_2m_mean": "mean",
+    "precipitation_sum": "sum",
+    "rain_sum": "sum",
+    "snowfall_sum": "sum",
+    "wind_speed_10m_mean": "mean",
+    "shortwave_radiation_sum": "sum",
+    "et0_fao_evapotranspiration": "sum"
+}
 
 @st.cache_data(ttl=3600, show_spinner="Downloading NVE data...")
 def load_data(start_date, end_date, area_type):
@@ -89,3 +110,41 @@ def load_data(start_date, end_date, area_type):
     ).reset_index(drop=True)
 
     return df
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_weather(points, start_date, end_date, variables):
+    """Download daily ERA5 weather and calculate spatial averages."""
+
+    params = {
+        "latitude": ",".join(points["latitude"].astype(str)),
+        "longitude": ",".join(points["longitude"].astype(str)),
+        "start_date": pd.Timestamp(start_date).strftime("%Y-%m-%d"),
+        "end_date": pd.Timestamp(end_date).strftime("%Y-%m-%d"),
+        "daily": ",".join(variables),
+        "models": "era5",
+        "timezone": "GMT"
+    }
+
+    response = requests.get(
+        OPEN_METEO_URL,
+        params=params,
+        timeout=120
+    )
+    response.raise_for_status()
+
+    data = response.json()
+
+    if isinstance(data, dict):
+        data = [data]
+
+    if len(data) != len(points):
+        raise ValueError("Unexpected number of weather locations")
+
+    df = pd.concat([
+        pd.DataFrame(location["daily"])
+        for location in data
+    ], ignore_index=True)
+
+    df["time"] = pd.to_datetime(df["time"])
+
+    return df.groupby("time").mean()
