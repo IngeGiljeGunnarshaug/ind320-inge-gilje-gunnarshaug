@@ -11,7 +11,7 @@ def initialize_session_state():
         "start_date": date(2020, 1, 1),
         "end_date": date(2024, 12, 31),
         "map_date": date(2024, 12, 31),
-        "forecast_horizon": 12
+        "forecast_horizon": 13
     }
 
     for key, value in defaults.items():

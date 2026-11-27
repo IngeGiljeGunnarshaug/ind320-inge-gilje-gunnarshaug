@@ -1,7 +1,7 @@
 import pandas as pd
 import requests
 import streamlit as st
-
+from io import StringIO
 
 # NVE Magasinstatistikk API endpoint.
 NVE_URL = "https://biapi.nve.no/magasinstatistikk/api/Magasinstatistikk/HentOffentligData"
@@ -216,3 +216,54 @@ def aggregate_weekly_weather(
         index=dates,
         name=variable
     )
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def download_exchange_rates(start_date, end_date):
+    """Download EUR and USD exchange rates from Norges Bank."""
+
+    url = (
+        "https://data.norges-bank.no/api/data/"
+        "EXR/B.EUR+USD.NOK.SP"
+    )
+
+    params = {
+        "startPeriod": pd.Timestamp(start_date).strftime("%Y-%m-%d"),
+        "endPeriod": pd.Timestamp(end_date).strftime("%Y-%m-%d"),
+        "format": "csvfile"
+    }
+
+    response = requests.get(
+        url,
+        params=params,
+        timeout=30
+    )
+
+    response.raise_for_status()
+
+    df = pd.read_csv(StringIO(response.text))
+
+    df = df[["TIME_PERIOD", "BASE_CUR", "OBS_VALUE"]]
+
+    df = df.rename(columns={
+        "TIME_PERIOD": "date",
+        "BASE_CUR": "currency",
+        "OBS_VALUE": "exchange_rate"
+    })
+
+    df["date"] = pd.to_datetime(df["date"])
+
+    df["exchange_rate"] = pd.to_numeric(
+        df["exchange_rate"],
+        errors="coerce"
+    )
+
+    df = df.pivot(
+        index="date",
+        columns="currency",
+        values="exchange_rate"
+    )
+
+    df = df.sort_index()
+    df.columns.name = None
+
+    return df
