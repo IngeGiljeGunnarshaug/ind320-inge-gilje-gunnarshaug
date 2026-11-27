@@ -707,3 +707,52 @@ def load_weekly_electricity(
     weekly.index.name = "date"
 
     return weekly
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_connection_electricity(
+    source,
+    destination,
+    year
+):
+    """
+    Retrieve daily imports and exports for one connection.
+
+    Data is downloaded directly from ENTSO-E and
+    aggregated to daily transferred energy in MWh.
+    """
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+
+        export_task = executor.submit(
+            download_entsoe_year,
+            source,
+            destination,
+            year
+        )
+
+        import_task = executor.submit(
+            download_entsoe_year,
+            destination,
+            source,
+            year
+        )
+
+        exports = export_task.result()
+        imports = import_task.result()
+
+    df = pd.DataFrame({
+        "Import": imports,
+        "Export": exports
+    })
+
+    if df.empty:
+        raise ValueError(
+            "No electricity data available "
+            "for the selected connection and year."
+        )
+
+    df = df.sort_index()
+
+    df.index.name = "date"
+
+    return df

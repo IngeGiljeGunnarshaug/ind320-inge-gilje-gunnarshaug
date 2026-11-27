@@ -42,7 +42,7 @@ DEFAULT_FORECAST_PARAMS = {
     "m": 52,
     "history": 360,
     "horizon": 13,
-    "learning_rate": 0.05,
+    "learning_rate": 0.01,
     "sources": ("weather",),
     "confidence": 0.95
 }
@@ -530,6 +530,43 @@ def forecast_reservoir(
 
     return forecast, metrics
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_actual_observations(
+    area_type,
+    area_number,
+    start_date,
+    end_date
+):
+    """Retrieve actual reservoir filling for the forecast period."""
+
+    start_date = pd.Timestamp(start_date)
+    end_date = min(
+        pd.Timestamp(end_date),
+        pd.Timestamp.today().normalize()
+    )
+
+    # No observations can exist for a completely future period.
+    if start_date > end_date:
+        return pd.Series(dtype=float, name="actual")
+
+    df = load_data(
+        start_date,
+        end_date,
+        area_type
+    )
+
+    df = df.loc[df["area_number"] == area_number]
+
+    actual = (
+        df.groupby("date")["fill_fraction"]
+        .mean()
+        .sort_index()
+    )
+
+    actual.index = pd.to_datetime(actual.index)
+    actual.name = "actual"
+
+    return actual
 
 # --------------------------------------------------
 # INTERACTIVE FORECAST PLOT WITH ANIMATION
@@ -539,7 +576,8 @@ def plot_reservoir_forecast(
     historical,
     forecast,
     confidence=0.95,
-    display_weeks=104
+    display_weeks=104,
+    actual=None
 ):
     """Create an interactive forecast with animated predictions."""
 
@@ -636,6 +674,29 @@ def plot_reservoir_forecast(
             dash="dot"
         )
     ))
+
+    # Trace 5: Actual filling during the forecast period.
+    if actual is not None and actual.notna().any():
+
+        actual = actual.reindex(forecast.index)
+
+        actual_plot = pd.concat([
+            last_observed,
+            actual
+        ])
+
+        fig.add_trace(go.Scatter(
+            x=actual_plot.index,
+            y=actual_plot,
+            mode="lines+markers",
+            name="Actual filling",
+            line=dict(
+                color="#E9A23B",
+                width=2.5
+            ),
+            marker=dict(size=5),
+            connectgaps=False
+        ))
 
     # Vertical forecast origin line.
     fig.add_shape(

@@ -7,7 +7,8 @@ from forecast_utils import (
     DEFAULT_FORECAST_PARAMS,
     prepare_forecast_data,
     forecast_reservoir,
-    plot_reservoir_forecast
+    plot_reservoir_forecast,
+    load_actual_observations
 )
 
 
@@ -340,6 +341,36 @@ else:
 
     metrics = result["metrics"]
 
+    # Retrieve actual observations independently of training.
+    try:
+
+        actual = load_actual_observations(
+            area_type=area_type,
+            area_number=area_number,
+            start_date=forecast.index.min(),
+            end_date=forecast.index.max()
+        )
+
+    except Exception as error:
+
+        st.warning(
+            f"Unable to retrieve actual observations: {error}"
+        )
+
+        actual = pd.Series(dtype=float, name="actual")
+
+    # Align actual observations with prediction dates.
+    comparison = forecast.copy()
+
+    comparison["actual"] = actual.reindex(
+        forecast.index
+    )
+
+    comparison["error_pp"] = (
+        comparison["prediction"]
+        - comparison["actual"]
+    ) * 100
+
     st.subheader("Forecast results")
 
     st.caption(
@@ -357,12 +388,12 @@ else:
     col1, col2, col3, col4 = st.columns(4)
 
     col1.metric(
-        "MAE",
+        "Backtest MAE",
         f"{metrics['MAE'] * 100:.2f} pp"
     )
 
     col2.metric(
-        "RMSE",
+        "Backtest RMSE",
         f"{metrics['RMSE'] * 100:.2f} pp"
     )
 
@@ -408,7 +439,8 @@ else:
         df,
         forecast,
         confidence=result["confidence"],
-        display_weeks=display_weeks
+        display_weeks=display_weeks,
+        actual=comparison["actual"]
     )
 
     st.plotly_chart(
@@ -423,6 +455,55 @@ else:
         "reservoir filling one week at a time."
     )
 
+    # Evaluate the forecast against available actual observations.
+    st.subheader("Actual forecast performance")
+
+    evaluated = comparison.dropna(
+        subset=["actual", "prediction"]
+    )
+
+    if evaluated.empty:
+
+        st.info(
+            "No actual observations are available "
+            "for the forecast period yet."
+        )
+
+    else:
+
+        mae = evaluated["error_pp"].abs().mean()
+
+        rmse = (
+            evaluated["error_pp"].pow(2).mean()
+        ) ** 0.5
+
+        coverage = (
+            (evaluated["actual"] >= evaluated["lower"])
+            & (evaluated["actual"] <= evaluated["upper"])
+        ).mean()
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        col1.metric(
+            "Actual MAE",
+            f"{mae:.2f} pp"
+        )
+
+        col2.metric(
+            "Actual RMSE",
+            f"{rmse:.2f} pp"
+        )
+
+        col3.metric(
+            "Interval coverage",
+            f"{coverage:.1%}"
+        )
+
+        col4.metric(
+            "Evaluated weeks",
+            f"{len(evaluated)}/{len(forecast)}"
+        )
+
     # --------------------------------------------------
     # FORECAST DATA
     # --------------------------------------------------
@@ -430,25 +511,29 @@ else:
     with st.expander("View forecast data"):
 
         st.dataframe(
-            forecast.reset_index(),
+            comparison.reset_index(),
             hide_index=True,
             use_container_width=True,
-
             column_config={
-
                 "prediction": st.column_config.NumberColumn(
                     "Prediction",
                     format="percent"
                 ),
-
                 "lower": st.column_config.NumberColumn(
                     "Lower bound",
                     format="percent"
                 ),
-
                 "upper": st.column_config.NumberColumn(
                     "Upper bound",
                     format="percent"
+                ),
+                "actual": st.column_config.NumberColumn(
+                    "Actual",
+                    format="percent"
+                ),
+                "error_pp": st.column_config.NumberColumn(
+                    "Error (pp)",
+                    format="%.2f"
                 )
             }
         )

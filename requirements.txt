@@ -13,3 +13,5 @@ plotly
 folium
 streamlit-folium
 river
+entsoe-py
+python-dotenv
